@@ -69,7 +69,7 @@ jobs:
     strategy:
       # Eine misslungene Region soll die anderen nicht aufhalten.
       fail-fast: false
-      max-parallel: 4
+      max-parallel: 2
       matrix:
         region: ${{ fromJSON(needs.plan.outputs.regionen) }}
     steps:
@@ -88,13 +88,14 @@ jobs:
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/lib/android /opt/hostedtoolcache/CodeQL
           df -h "$RUNNER_TEMP"
 
+      # Der Server lehnt manchmal die Verbindung ab: mehrmals versuchen, auch bei Verbindungsfehlern.
       - name: Kartenauszug laden
         env:
           REGION: ${{ matrix.region }}
         run: |
           url=$(python3 tools/gebietsdateien/erzeugen.py url "$REGION")
           echo "Lade $url"
-          curl --fail --location --silent --show-error --retry 5 --retry-delay 30 \
+          curl --fail --location --silent --show-error --retry 8 --retry-delay 30 --retry-all-errors \
             --user-agent "gebietsdateien (GitHub Actions)" \
             --output "$RUNNER_TEMP/auszug.osm.pbf" "$url"
           ls -l "$RUNNER_TEMP/auszug.osm.pbf"
