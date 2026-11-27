@@ -29,6 +29,19 @@ REGIONEN = {
     "switzerland": ("Schweiz", "europe/switzerland"),
 }
 
+# Die 16 Bundeslaender. Zusammen decken sie ganz Deutschland ab. Eine einzige Datei "germany"
+# waere gepackt groesser als 2 GB und laesst sich deshalb nicht ablegen.
+BUNDESLAENDER = [
+    "baden-wuerttemberg", "bayern", "berlin", "brandenburg", "bremen", "hamburg", "hessen",
+    "mecklenburg-vorpommern", "niedersachsen", "nordrhein-westfalen", "rheinland-pfalz", "saarland",
+    "sachsen", "sachsen-anhalt", "schleswig-holstein", "thueringen",
+]
+
+
+def land(region_id):
+    """Land, zu dem ein Gebiet als Teil gehoert ("de" fuer ein Bundesland), sonst ""."""
+    return "de" if region_id in BUNDESLAENDER else ""
+
 
 def name(region_id):
     return REGIONEN[region_id][0]
@@ -39,11 +52,16 @@ def url(region_id):
 
 
 def auswahl(text):
-    """Liest die Eingabe "bayern, berlin" oder "alle". Unbekannte Kennungen sind ein Fehler."""
+    """Liest die Eingabe "bayern, berlin", "deutschland" (alle 16 Bundeslaender) oder "alle".
+
+    Unbekannte Kennungen sind ein Fehler.
+    """
     wanted = [part.strip().lower() for part in text.replace(";", ",").replace(" ", ",").split(",")]
     wanted = [part for part in wanted if part]
     if not wanted or wanted == ["alle"]:
         return list(REGIONEN)
+    # "deutschland" steht fuer die 16 Bundeslaender einzeln.
+    wanted = [each for part in wanted for each in (BUNDESLAENDER if part == "deutschland" else [part])]
     unknown = [part for part in wanted if part not in REGIONEN]
     if unknown:
         raise ValueError(

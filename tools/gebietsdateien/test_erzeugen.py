@@ -182,6 +182,12 @@ class RegionenTest(unittest.TestCase):
         self.assertEqual(regionen.auswahl(" Bayern, berlin bayern "), ["bayern", "berlin"])
         self.assertEqual(regionen.auswahl("alle"), list(regionen.REGIONEN))
         self.assertEqual(regionen.auswahl(""), list(regionen.REGIONEN))
+        self.assertEqual(regionen.auswahl("deutschland"), regionen.BUNDESLAENDER)
+        self.assertEqual(regionen.auswahl("Deutschland, bayern, austria"), regionen.BUNDESLAENDER + ["austria"])
+        self.assertEqual(len(regionen.BUNDESLAENDER), 16)
+        self.assertEqual(regionen.land("bayern"), "de")
+        self.assertEqual(regionen.land("germany"), "")
+        self.assertEqual(regionen.land("austria"), "")
         with self.assertRaises(ValueError):
             regionen.auswahl("bayern,atlantis")
 
@@ -243,8 +249,8 @@ class AblaufTest(unittest.TestCase):
             entry = index["gebiete"][0]
             self.assertEqual(
                 sorted(entry),
-                ["adressen", "bbox", "bytes", "bytes_entpackt", "datei", "datum", "format", "id", "name", "orte", "sha256",
-                 "wege"],
+                ["adressen", "bbox", "bytes", "bytes_entpackt", "datei", "datum", "format", "id", "land", "name", "orte",
+                 "sha256", "wege"],
             )
             self.assertEqual(entry["id"], "bayern")
             self.assertEqual(entry["datei"], "bayern.sqlite.gz")
@@ -253,6 +259,7 @@ class AblaufTest(unittest.TestCase):
             self.assertEqual(entry["bbox"], [50.0, 10.0, 50.2612, 10.9627])
             self.assertEqual(entry["datum"], "2024-02-03T04:05:06Z")
             self.assertEqual(entry["orte"], 2)
+            self.assertEqual(entry["land"], "de")
 
     def test_leerer_auszug_ist_ein_fehler(self):
         with tempfile.TemporaryDirectory() as folder:

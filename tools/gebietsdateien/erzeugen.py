@@ -6,7 +6,7 @@ Aufrufe:
         schreibt out/bayern.sqlite.gz und out/bayern.info.json
   erzeugen.py index <ordner> [--ziel index.json]
         fasst alle *.info.json eines Ordners zu index.json zusammen
-  erzeugen.py matrix "bayern,berlin" | "alle"
+  erzeugen.py matrix "bayern,berlin" | "deutschland" | "alle"
         gibt die Regionen als JSON-Liste aus (fuer den Arbeitsablauf bei GitHub)
   erzeugen.py url bayern
         gibt die Adresse des Auszugs bei Geofabrik aus
@@ -158,6 +158,9 @@ def bauen(args):
         "wege": int(meta["way_count"]),
         "orte": int(meta["poi_count"]),
     }
+    # Bundeslaender tragen ihr Land, damit die App "Ganz Deutschland" aus den Teilen zusammensetzen kann.
+    if regionen.land(region_id):
+        info["land"] = regionen.land(region_id)
     with open(info_path, "w", encoding="utf-8") as out:
         json.dump(info, out, ensure_ascii=False, indent=1)
         out.write("\n")

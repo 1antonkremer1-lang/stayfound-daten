@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       regionen:
-        description: 'Regionen, mit Komma getrennt (siehe tools/gebietsdateien/regionen.py), oder "alle"'
+        description: 'Regionen, mit Komma getrennt (siehe tools/gebietsdateien/regionen.py), "deutschland" fuer alle 16 Bundeslaender, oder "alle"'
         required: true
         default: bayern
 
