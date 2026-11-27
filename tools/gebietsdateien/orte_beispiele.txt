@@ -1,0 +1,33 @@
+# Gemeinsame Beispiele fuer orte.py (test_orte.py) und core PoiKinds.kt (PoiKindsTest.kt).
+# Je Zeile, mit Tabulator getrennt: Angaben (k=v, getrennt mit " | "), Art ("-" = keine), Name, info
+# (Zeilenumbrueche in info als \n geschrieben). Beide Seiten muessen fuer jede Zeile dasselbe liefern.
+amenity=hospital | emergency=yes | name=Klinikum Coburg	hospital	Klinikum Coburg	z=mit Notaufnahme
+amenity=hospital | name=Reha-Klinik	hospital	Reha-Klinik	
+amenity=pharmacy | name=Löwen-Apotheke | opening_hours=Mo-Fr 08:00-18:30; Sa 08:00-12:00 | phone=+49 9561 1234	pharmacy	Löwen-Apotheke	oh=Mo-Fr 08:00-18:30; Sa 08:00-12:00\ntel=+49 9561 1234
+emergency=defibrillator | defibrillator:location=Eingang links | indoor=yes	defibrillator		z=Eingang links
+emergency=defibrillator | indoor=yes | opening_hours=24/7	defibrillator		z=im Gebäude\noh=24/7
+highway=emergency_access_point | ref=CO-1234 | name=Waldweg	emergency_point	CO-1234	
+amenity=fuel | brand=Aral | contact:phone=09561 55	fuel	Aral	tel=09561 55
+amenity=charging_station | bicycle=yes	charging_bike		
+amenity=charging_station | bicycle=yes | motorcar=yes	charging_car		
+amenity=charging_station | operator=Stadtwerke	charging_car		
+amenity=bicycle_repair_station	bicycle_repair		
+highway=bus_stop | name=Coburg Bahnhof	transit_stop	Coburg Bahnhof	z=Bus
+highway=bus_stop | amenity=shelter | shelter_type=public_transport	transit_stop		z=Bus
+railway=halt | name=Coburg Nord	transit_stop	Coburg Nord	z=Bahnhalt
+railway=tram_stop	transit_stop		z=Straßenbahn
+public_transport=station | name=ZOB	transit_stop	ZOB	z=Station
+amenity=toilets | fee=no | wheelchair=yes	toilets		fee=no\nwc=yes
+amenity=toilets | access=private	-		
+amenity=drinking_water	drinking_water		
+amenity=shelter | name=Waldhütte	shelter	Waldhütte	
+amenity=shelter | shelter_type=public_transport	-		
+amenity=vending_machine | vending=coffee;drinks	vending		z=Kaffee, Getränke
+amenity=vending_machine | vending=parking_tickets;flowers	vending		z=Parkscheine, flowers
+leisure=skatepark	skatepark		
+leisure=pitch | sport=skateboard;bmx	skatepark		
+leisure=pitch | sport=soccer	-		
+leisure=fitness_station	fitness		
+leisure=playground | name=Spielplatz am Anger	playground	Spielplatz am Anger	
+shop=bakery | name=Bäcker	-		
+amenity=bench	-		
