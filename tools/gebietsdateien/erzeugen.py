@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import datenbank  # noqa: E402
 import kodierung  # noqa: E402
+import orte  # noqa: E402
 import regionen  # noqa: E402
 
 
@@ -32,13 +33,14 @@ def read_pbf(path, target, index_spec):
     """Liest den Auszug und fuellt die Gebietsdatei. @return Zeitstempel der Kartendaten (oder "")."""
     import osmium
 
-    # Nur Punkte und Linien: Die App fragt Adressen als node und way ab, Strassen als way.
+    # Nur Punkte und Linien: Die App fragt Adressen und Orte als node und way ab, Strassen als way.
+    # Relationen (z.B. ein Krankenhaus als Multipolygon) bleiben aus, wie bei der Abfrage in der App.
     # Der Filter laesst nur Objekte mit passender Angabe bis zu Python durch; die Lage aller
     # Punkte merkt sich osmium vorher selbst (with_locations), sonst wuerde es viel zu langsam.
     processor = (
         osmium.FileProcessor(path, osmium.osm.NODE | osmium.osm.WAY)
         .with_locations(index_spec)
-        .with_filter(osmium.filter.KeyFilter("addr:housenumber", "highway"))
+        .with_filter(osmium.filter.KeyFilter("addr:housenumber", *orte.KEYS))
     )
     timestamp = processor.header.get("osmosis_replication_timestamp") or processor.header.get("timestamp") or ""
     newest = None
@@ -51,12 +53,24 @@ def read_pbf(path, target, index_spec):
             if newest is None or changed > newest:
                 newest = changed
         if obj.is_node():
-            if "addr:housenumber" in tags and obj.location.valid():
+            if not obj.location.valid():
+                continue
+            if "addr:housenumber" in tags:
                 row = kodierung.address(obj.location.y / 1e7, obj.location.x / 1e7, _address_tags(tags))
                 if row is not None:
                     target.add_address(row)
+            kind = orte.classify(tags)
+            if kind is not None:
+                target.add_poi(orte.poi_row(obj.location.y / 1e7, obj.location.x / 1e7, kind, tags))
             continue
         if not obj.is_way():
+            continue
+
+        # Viele Linien (Parkplaetze, Sportplaetze, Feldwege ...) braucht keiner: gar nicht erst die Punkte holen.
+        has_address = "addr:housenumber" in tags
+        is_road = tags.get("highway") in kodierung.QUERY_HIGHWAYS
+        kind = orte.classify(tags)
+        if not has_address and not is_road and kind is None:
             continue
 
         ids, lat_e7, lon_e7 = [], [], []
@@ -70,15 +84,20 @@ def read_pbf(path, target, index_spec):
             lat_e7.append(location.y)
             lon_e7.append(location.x)
 
-        if "addr:housenumber" in tags and lat_e7:
+        if has_address and lat_e7:
             # Wie "out center": Mitte des Rechtecks um den Umriss, auf 7 Stellen ausgegeben.
             lat, lon = kodierung.way_center(lat_e7, lon_e7)
             row = kodierung.address(lat, lon, _address_tags(tags))
             if row is not None:
                 target.add_address(row)
 
+        if kind is not None and lat_e7:
+            # Ort als Linie (z.B. Spielplatz, Tankstelle): Mitte wie bei den Adressen.
+            lat, lon = kodierung.way_center(lat_e7, lon_e7)
+            target.add_poi(orte.poi_row(lat, lon, kind, tags))
+
         # Wie RoadStore.readWay: fehlt ein Punkt, wird die ganze Strasse ausgelassen.
-        if complete and tags.get("highway") in kodierung.QUERY_HIGHWAYS:
+        if complete and is_road:
             row = kodierung.way_row(obj.id, dict((tag.k, tag.v) for tag in tags), ids, lat_e7, lon_e7)
             if row is not None:
                 target.add_way(row)
@@ -137,6 +156,7 @@ def bauen(args):
         "bytes_entpackt": raw_bytes,
         "adressen": int(meta["addr_count"]),
         "wege": int(meta["way_count"]),
+        "orte": int(meta["poi_count"]),
     }
     with open(info_path, "w", encoding="utf-8") as out:
         json.dump(info, out, ensure_ascii=False, indent=1)

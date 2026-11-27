@@ -14,6 +14,7 @@ import unittest
 import datenbank
 import erzeugen
 import kodierung
+import orte
 import regionen
 
 try:
@@ -24,6 +25,8 @@ except ImportError:
 
 # Kleiner Auszug: 2 Adressen als Punkt (eine unbrauchbar), 1 Gebaeude mit Adresse, 4 Linien mit highway
 # (eine nicht abgefragte Art, eine mit fehlendem Punkt), 1 Relation mit Adresse (zaehlt nicht).
+# Orte: Apotheke als Punkt, Spielplatz als Linie, Wartehaeuschen (kein Ort), Parkplatz als Linie (kein Ort),
+# Krankenhaus als Relation (bleibt aus).
 FIXTURE = """<?xml version='1.0' encoding='UTF-8'?>
 <osm version="0.6" generator="test">
   <node id="1" version="1" timestamp="2024-01-01T00:00:00Z" lat="50.0000000" lon="10.0000000"/>
@@ -67,6 +70,28 @@ FIXTURE = """<?xml version='1.0' encoding='UTF-8'?>
     <tag k="addr:place" v="Oberdorf"/>
     <tag k="addr:housenumber" v="7"/>
   </way>
+  <node id="30" version="1" timestamp="2024-01-01T00:00:00Z" lat="50.2600000" lon="10.9600000">
+    <tag k="amenity" v="pharmacy"/>
+    <tag k="name" v="Löwen-Apotheke"/>
+    <tag k="opening_hours" v="Mo-Fr 08:00-18:00"/>
+  </node>
+  <node id="31" version="1" timestamp="2024-01-01T00:00:00Z" lat="50.2601000" lon="10.9601000">
+    <tag k="amenity" v="shelter"/>
+    <tag k="shelter_type" v="public_transport"/>
+  </node>
+  <way id="210" version="1" timestamp="2024-01-01T00:00:00Z">
+    <nd ref="20"/><nd ref="21"/><nd ref="22"/><nd ref="20"/>
+    <tag k="leisure" v="playground"/>
+  </way>
+  <way id="211" version="1" timestamp="2024-01-01T00:00:00Z">
+    <nd ref="20"/><nd ref="21"/><nd ref="22"/><nd ref="20"/>
+    <tag k="amenity" v="parking"/>
+  </way>
+  <relation id="301" version="1" timestamp="2024-01-01T00:00:00Z">
+    <member type="way" ref="211" role="outer"/>
+    <tag k="type" v="multipolygon"/>
+    <tag k="amenity" v="hospital"/>
+  </relation>
   <relation id="300" version="1" timestamp="2024-01-01T00:00:00Z">
     <member type="way" ref="200" role="outer"/>
     <tag k="type" v="multipolygon"/>
@@ -86,6 +111,7 @@ class DatenbankTest(unittest.TestCase):
             row = kodierung.way_row(7, {"highway": "residential"}, [1, 2], [500000000, 500010000], [100000000, 100020000])
             target.add_way(row)
             target.add_way(row)  # doppelte Kennung wird uebergangen
+            target.add_poi(orte.poi_row(50.1, 10.5, orte.TOILETS, {"amenity": "toilets", "fee": "no"}))
             meta = target.finish("x", "Testgebiet", "2024-01-01T00:00:00Z")
             self.assertEqual(meta["way_count"], "1")
 
@@ -96,18 +122,24 @@ class DatenbankTest(unittest.TestCase):
                 [c[0] for c in columns("way")],
                 ["id", "rank", "kind", "flags", "oneway", "name", "south", "west", "north", "east", "nodes"],
             )
+            self.assertEqual(columns("poi"), [
+                ("cell", "INTEGER"), ("lat", "REAL"), ("lon", "REAL"), ("kind", "TEXT"), ("name", "TEXT"), ("info", "TEXT"),
+            ])
             indexes = dict(db.execute("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL"))
             # Wortgleich mit OfflineAddressStore.kt und RoadStore.kt
             self.assertEqual(indexes, {
                 "addr_cell": "CREATE INDEX addr_cell ON addr (cell)",
                 "way_south": "CREATE INDEX way_south ON way (south)",
+                "poi_cell": "CREATE INDEX poi_cell ON poi (cell)",
             })
             self.assertEqual(db.execute("SELECT * FROM addr").fetchall(), [(150261210962, 50.2612, 10.9627, "Marktplatz 3")])
             self.assertEqual(db.execute("SELECT typeof(nodes), length(nodes) FROM way").fetchall(), [("blob", 32)])
+            self.assertEqual(db.execute("SELECT * FROM poi").fetchall(), [(150100210500, 50.1, 10.5, "toilets", "", "fee=no")])
             self.assertEqual(dict(db.execute("SELECT key, value FROM meta")), {
                 "format": "1", "region_id": "x", "region_name": "Testgebiet",
                 "bbox_south": "50.0", "bbox_west": "10.0", "bbox_north": "50.2612", "bbox_east": "10.9627",
-                "osm_timestamp": "2024-01-01T00:00:00Z", "addr_count": "1", "way_count": "1", "indexes": "1",
+                "osm_timestamp": "2024-01-01T00:00:00Z", "addr_count": "1", "way_count": "1", "poi_count": "1",
+                "indexes": "1",
             })
             db.close()
 
@@ -188,11 +220,18 @@ class AblaufTest(unittest.TestCase):
                 (101, 3, 0, 6, 1, "A 73", 50.0, 10.0, 50.002, 10.002,
                  "00000000000000011DCD650005F5E100" "00000000000000031DCDB32005F62F20"),
             ])
+            # Orte: Apotheke (Punkt) und Spielplatz (Linie, Mitte des Rechtecks). Wartehaeuschen und Parkplatz sind
+            # keine Orte, das Krankenhaus als Relation bleibt aus.
+            self.assertEqual(db.execute("SELECT cell, lat, lon, kind, name, info FROM poi ORDER BY kind").fetchall(), [
+                (150260210960, 50.26, 10.96, "pharmacy", "Löwen-Apotheke", "oh=Mo-Fr 08:00-18:00"),
+                (150000210000, 50.0001, 10.0002, "playground", "", ""),
+            ])
             meta = dict(db.execute("SELECT key, value FROM meta"))
             db.close()
             self.assertEqual(meta["region_name"], "Bayern")
             self.assertEqual(meta["addr_count"], "2")
             self.assertEqual(meta["way_count"], "2")
+            self.assertEqual(meta["poi_count"], "2")
             # Kein Zeitstempel im Dateikopf: juengste Aenderung der gelesenen Objekte
             self.assertEqual(meta["osm_timestamp"], "2024-02-03T04:05:06Z")
 
@@ -204,7 +243,8 @@ class AblaufTest(unittest.TestCase):
             entry = index["gebiete"][0]
             self.assertEqual(
                 sorted(entry),
-                ["adressen", "bbox", "bytes", "bytes_entpackt", "datei", "datum", "format", "id", "name", "sha256", "wege"],
+                ["adressen", "bbox", "bytes", "bytes_entpackt", "datei", "datum", "format", "id", "name", "orte", "sha256",
+                 "wege"],
             )
             self.assertEqual(entry["id"], "bayern")
             self.assertEqual(entry["datei"], "bayern.sqlite.gz")
@@ -212,6 +252,7 @@ class AblaufTest(unittest.TestCase):
             self.assertEqual(entry["sha256"], hashlib.sha256(data).hexdigest())
             self.assertEqual(entry["bbox"], [50.0, 10.0, 50.2612, 10.9627])
             self.assertEqual(entry["datum"], "2024-02-03T04:05:06Z")
+            self.assertEqual(entry["orte"], 2)
 
     def test_leerer_auszug_ist_ein_fehler(self):
         with tempfile.TemporaryDirectory() as folder:
